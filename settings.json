@@ -1,0 +1,251 @@
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run `zed: open default settings` from the
+// command palette (cmd-shift-p / ctrl-shift-p)
+{
+  "markdown_preview": {
+    "font_family": ".SystemUIFont"
+  },
+  "helix_mode": false,
+  "vim_mode": false,
+  "ui_font_family": ".SystemUIFont",
+  "minimum_contrast_for_highlights": 40.0,
+  "buffer_font_weight": 250.0,
+  "buffer_font_family": ".ZedMono",
+  "mouse_wheel_zoom": false,
+  "fullscreen_mode": "simple",
+  "restore_on_startup": "last_workspace",
+  "redact_private_values": false,
+  "cli_default_open_behavior": "existing_window",
+  "global_lsp_settings": {
+    "semantic_token_rules": [
+      {
+        "token_type": "comment"
+      }
+    ]
+  },
+
+  "diagnostics": {
+    "button": false
+  },
+  "debugger": {
+    "button": false
+  },
+
+  "disable_ai": false,
+  "cursor_shape": "bar",
+  "cursor_blink": false,
+  "tabs": {
+    "file_icons": true,
+    "git_status": false,
+    "show_close_button": "always"
+  },
+  "tab_bar": {
+    "show_nav_history_buttons": false,
+    "show": true
+  },
+  "status_bar": {
+    "cursor_position_button": false,
+    "active_language_button": false
+  },
+  "show_edit_predictions": false,
+  "cursor_animation": {
+    "enabled": true
+  },
+  "use_display_p3": true,
+  "languages": {
+    "C++": {
+      "format_on_save": "on"
+    },
+    "TypeScript": {
+      "format_on_save": "on"
+    },
+    "Markdown": {
+      "format_on_save": "on"
+    },
+    "JSDoc": {
+      "format_on_save": "on"
+    },
+    "TSX": {
+      "format_on_save": "on",
+      "show_edit_predictions": true
+    }
+  },
+  "soft_wrap": "editor_width",
+  "autosave": "on_focus_change",
+  "proxy": "",
+  "terminal": {
+    "dock": "bottom",
+    "button": true,
+    "blinking": "on",
+    "font_weight": 300.0,
+    "font_size": 14.0,
+    "font_family": "JetBrainsMono Nerd Font"
+  },
+  "git_panel": {
+    "dock": "right",
+    "tree_view": true
+  },
+  "edit_predictions": {
+    "provider": "zed"
+  },
+  "agent": {
+    "tool_permissions": {
+      "tools": {
+        "terminal": {
+          "default": "allow"
+        }
+      }
+    },
+    "default_profile": "write",
+    "dock": "left",
+    "thinking_display": "always_collapsed",
+    "default_model": {
+      "effort": "medium",
+      "provider": "zed.dev",
+      "model": "gpt-6-luna",
+      "enable_thinking": true
+    },
+    "favorite_models": [],
+    "model_parameters": []
+  },
+  "search": {
+    "button": true
+  },
+  "collaboration_panel": {
+    "dock": "right",
+    "button": false
+  },
+  "icon_theme": "Material Icon Theme",
+  "language_models": {
+    "opencode": {
+      "show_go_models": true,
+      "show_zen_models": false
+    }
+  },
+  "context_servers": {
+    "mcp-server-playwright": {
+      "enabled": false,
+      "remote": false,
+      "settings": {}
+    },
+    "chrome-devtools-mcp-zed": {
+      "enabled": false,
+      "remote": false,
+      "settings": {}
+    },
+    "mcp-server-github": {
+      "enabled": true,
+      "remote": false,
+      "settings": {
+        "github_personal_access_token": "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+      }
+    },
+    "mcp-server-context7": {
+      "enabled": true,
+      "remote": false,
+      "settings": {
+        "context7_api_key": "YOUR_CONTEXT7_API_KEY"
+      }
+    }
+  },
+  "agent_servers": {
+    "opencode": {
+      "type": "registry"
+    },
+    "cursor": {
+      "type": "registry"
+    },
+    "grok-build": {
+      "type": "registry"
+    },
+    "codex-acp": {
+      "type": "registry"
+    }
+  },
+  "base_keymap": "VSCode",
+  "ui_font_size": 16,
+  "buffer_font_size": 14.0,
+  "theme": {
+    "mode": "system",
+    "light": "Ayu Light",
+    "dark": "Aura Dark Custom"
+  },
+  "theme_overrides": {
+    "Ayu Light": {
+      "syntax": {
+        "constant.comment.todo": { "color": "#3b9ee5", "font_weight": 700 },
+        "constant.comment.todo.prefix": { "color": "#abb0b6" },
+        "constant.comment.todo.text": { "color": "#abb0b6" },
+        "constant.comment.todo.bracket": { "color": "#abb0b6" },
+        "constant.comment.todo.user": { "color": "#abb0b6" },
+        "string.comment.info": { "color": "#85b300", "font_weight": 700 },
+        "string.comment.info.prefix": { "color": "#abb0b6" },
+        "string.comment.info.text": { "color": "#abb0b6" },
+        "string.comment.info.bracket": { "color": "#abb0b6" },
+        "string.comment.info.user": { "color": "#abb0b6" },
+        "keyword.comment.warn": { "color": "#f1ad49", "font_weight": 700 },
+        "keyword.comment.warn.prefix": { "color": "#abb0b6" },
+        "keyword.comment.warn.text": { "color": "#abb0b6" },
+        "keyword.comment.warn.bracket": { "color": "#abb0b6" },
+        "keyword.comment.warn.user": { "color": "#abb0b6" },
+        "property.comment.error": { "color": "#ef7271", "font_weight": 700 },
+        "property.comment.error.prefix": { "color": "#abb0b6" },
+        "property.comment.error.text": { "color": "#abb0b6" },
+        "property.comment.error.bracket": { "color": "#abb0b6" },
+        "property.comment.error.user": { "color": "#abb0b6" }
+      }
+    }
+  },
+  "project_panel": {
+    "dock": "right",
+    "default_width": 400,
+    "hide_root": true,
+    "auto_fold_dirs": false,
+    "starts_open": false,
+    "git_status": false,
+    "sticky_scroll": false,
+    "scrollbar": {
+      "show": "never"
+    },
+    "indent_guides": {
+      "show": "never"
+    }
+  },
+  "outline_panel": {
+    "button": false,
+    "default_width": 300,
+    "indent_guides": {
+      "show": "never"
+    }
+  },
+
+  "toolbar": {
+    "code_actions": false,
+    "quick_actions": false,
+    "breadcrumbs": false
+  },
+  "scrollbar": {
+    "show": "never"
+  },
+  "gutter": {
+    "min_line_number_digits": 0,
+    "folds": false,
+    "runnables": false
+  },
+  "indent_guides": {
+    "enabled": false
+  },
+
+  "lsp": {
+    "wakatime": {
+      "initialization_options": {
+        "api-key": "YOUR_WAKATIME_API_KEY"
+      }
+    }
+  }
+}
