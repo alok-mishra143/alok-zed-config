@@ -2,6 +2,9 @@
 
 Zed settings + the bundled **Aura Dark Custom** theme.
 
+<img width="2400" height="1350" alt="image" src="https://github.com/user-attachments/assets/925e2716-d265-4ea8-aca8-922daeea6728" />
+
+
 ## Install
 
 Quit Zed, then paste one line into a terminal. No clone, no extra tools.
