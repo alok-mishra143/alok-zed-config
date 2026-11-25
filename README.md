@@ -1,6 +1,6 @@
 # alok-zed-config
 
-Zed settings + the bundled **Aura Dark Custom** theme.
+Zed settings, keymap and the bundled **Aura Dark Custom** theme.
 
 <img width="2400" height="1350" alt="image" src="https://github.com/user-attachments/assets/925e2716-d265-4ea8-aca8-922daeea6728" />
 
@@ -21,9 +21,46 @@ curl -fsSL https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main
 irm https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main/install.ps1 | iex
 ```
 
-The command downloads the settings and theme, backs up your old
-`settings.json`, and installs everything. Then quit and reopen Zed, open the
-theme selector (`theme selector: toggle`) and pick **Aura Dark Custom**.
+The command downloads the settings, keymap and theme, backs up your old files,
+and installs everything. Then quit and reopen Zed, open the theme selector
+(`theme selector: toggle`) and pick **Aura Dark Custom**.
+
+## Keybindings
+
+`keymap.json` layers a few ctrl-based conveniences on top of the **VSCode**
+base keymap:
+
+| Shortcut | Action |
+| --- | --- |
+| `⌃B` | Toggle the right dock |
+| `⌃P` | Focus the project panel |
+| ``⌃` `` | Toggle the terminal panel |
+| `⌃⇧F` / `⌃⇧H` | Project search / search and replace |
+| `⌃⇧T` | Reopen the last closed tab |
+| `⌃⌥P` | Toggle AI edit predictions |
+| `⌃⌥I` / `⌃⌥G` | Toggle inlay hints / inline git blame |
+| `⇧` `⇧` | File finder |
+
+Everything else stays on the familiar VS Code shortcuts. See
+[KEYBINDINGS.md](KEYBINDINGS.md) for the custom bindings plus a cheat sheet of
+the defaults worth memorizing.
+
+Edit the keymap with `⌘K ⌘S`; run `zed: open default keymap` from the command
+palette to inspect the defaults.
+
+## Quality of life
+
+Settings added on top of the original config:
+
+- **Which-key menu** — pending chords show their possible continuations.
+- **Preview tabs** from the file finder — `⌘P` reuses a tab instead of opening
+  a new one each time, like VS Code.
+- **Keep window open** when the last tab is closed (`⌘W` no longer quits the
+  window).
+- **Faster scanning** — `node_modules`, `.next`, `dist`, `build`, `target`,
+  `.venv` and `__pycache__` are excluded from project scans and search.
+- **Web formatting** — format-on-save for JavaScript, JSON, CSS, SCSS and
+  HTML, with 2-space indentation for web languages.
 
 ## Optional
 
@@ -33,6 +70,8 @@ theme selector (`theme selector: toggle`) and pick **Aura Dark Custom**.
   built-in theme.
 - Fill in the `YOUR_*` placeholders in `settings.json` if you use GitHub MCP,
   Context7, or WakaTime.
+- `terminal.font_family` is set to **JetBrainsMono Nerd Font**; install it or
+  change the family if it is missing.
 
 ## Run from a clone instead
 
@@ -42,6 +81,6 @@ cd alok-zed-config
 ./install.sh
 ```
 
-Uninstall: delete `themes/aura-dark-custom.json` and restore the newest
-`settings.json.backup-*` in your Zed config folder (`~/.config/zed` on
+Uninstall: delete `keymap.json`, `themes/aura-dark-custom.json` and restore the
+newest `*.backup-*` files in your Zed config folder (`~/.config/zed` on
 macOS/Linux, `%APPDATA%\Zed` on Windows).

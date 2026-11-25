@@ -14,8 +14,8 @@
 #
 # Options:
 #   -d, --dir PATH      Install into PATH instead of the default Zed config dir
-#   -n, --no-backup     Do not back up existing settings/theme files
-#       --base-url URL  Download settings/theme from URL instead of this checkout
+#   -n, --no-backup     Do not back up existing settings/keymap/theme files
+#       --base-url URL  Download config files from URL instead of this checkout
 #       --dry-run       Show what would happen without changing anything
 #   -h, --help          Show this help
 #
@@ -38,6 +38,7 @@ set -euo pipefail
 BASE_URL="${ALOK_ZED_CONFIG_BASE_URL:-https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main}"
 
 THEME_FILE="aura-dark-custom.json"
+KEYMAP_FILE="keymap.json"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 
 # BASH_SOURCE is empty when the script is piped into bash.
@@ -47,9 +48,11 @@ if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]:-}" ]; then
 fi
 
 SETTINGS_SRC=""
+KEYMAP_SRC=""
 THEME_SRC=""
 if [ -n "$SCRIPT_DIR" ]; then
   SETTINGS_SRC="$SCRIPT_DIR/settings.json"
+  KEYMAP_SRC="$SCRIPT_DIR/$KEYMAP_FILE"
   THEME_SRC="$SCRIPT_DIR/themes/$THEME_FILE"
 fi
 
@@ -94,8 +97,8 @@ Usage:
 
 Options:
   -d, --dir PATH      Install into PATH instead of the default Zed config dir
-  -n, --no-backup     Do not back up existing settings/theme files
-      --base-url URL  Download settings/theme from URL instead of this checkout
+  -n, --no-backup     Do not back up existing settings/keymap/theme files
+      --base-url URL  Download config files from URL instead of this checkout
       --dry-run       Show what would happen without changing anything
   -h, --help          Show this help
 
@@ -200,6 +203,7 @@ case "$CONFIG_DIR" in
 esac
 
 SETTINGS_DEST="$CONFIG_DIR/settings.json"
+KEYMAP_DEST="$CONFIG_DIR/$KEYMAP_FILE"
 THEME_DEST="$CONFIG_DIR/themes/$THEME_FILE"
 
 # ---------------------------------------------------------------- helpers
@@ -252,14 +256,17 @@ BASE_URL="${BASE_URL%/}"
 
 # Running from a checkout: the files sit next to this script. Running from a
 # pipe (curl ... | bash): download them from BASE_URL first.
-if [ ! -f "$SETTINGS_SRC" ] || [ ! -f "$THEME_SRC" ]; then
+if [ ! -f "$SETTINGS_SRC" ] || [ ! -f "$KEYMAP_SRC" ] || [ ! -f "$THEME_SRC" ]; then
   TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/alok-zed-config.XXXXXX" 2>/dev/null || true)"
   [ -n "$TMP_DIR" ] || die "Could not create a temporary directory."
   SETTINGS_SRC="$TMP_DIR/settings.json"
+  KEYMAP_SRC="$TMP_DIR/$KEYMAP_FILE"
   THEME_SRC="$TMP_DIR/$THEME_FILE"
-  info "Downloading settings.json and $THEME_FILE"
+  info "Downloading settings.json, $KEYMAP_FILE and $THEME_FILE"
   fetch "$BASE_URL/settings.json" "$SETTINGS_SRC" ||
     die "Could not download settings.json from $BASE_URL"
+  fetch "$BASE_URL/$KEYMAP_FILE" "$KEYMAP_SRC" ||
+    die "Could not download $KEYMAP_FILE from $BASE_URL"
   fetch "$BASE_URL/themes/$THEME_FILE" "$THEME_SRC" ||
     die "Could not download themes/$THEME_FILE from $BASE_URL"
 fi
@@ -280,12 +287,19 @@ run mkdir -p "$CONFIG_DIR/themes"
 
 step "Backing up existing files"
 backup_if_exists "$SETTINGS_DEST"
+backup_if_exists "$KEYMAP_DEST"
 backup_if_exists "$THEME_DEST"
 
 step "Installing settings.json"
 run cp "$SETTINGS_SRC" "$SETTINGS_DEST"
 if ! $DRY_RUN; then
   ok "Settings -> $SETTINGS_DEST"
+fi
+
+step "Installing $KEYMAP_FILE"
+run cp "$KEYMAP_SRC" "$KEYMAP_DEST"
+if ! $DRY_RUN; then
+  ok "Keymap   -> $KEYMAP_DEST"
 fi
 
 step "Installing $THEME_FILE"
@@ -336,6 +350,8 @@ Next steps:
        $SETTINGS_DEST
 
 Notes:
+  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base
+    keymap. See KEYBINDINGS.md for the full list.
   - "Material Icon Theme" is referenced by settings.json. Install that
     extension, or change "icon_theme" to a built-in theme.
   - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension.

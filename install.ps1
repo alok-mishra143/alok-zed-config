@@ -3,18 +3,18 @@
     Installs the alok-zed-config setup into Zed on Windows.
 
 .DESCRIPTION
-    Copies settings.json and themes\aura-dark-custom.json into
+    Copies settings.json, keymap.json and themes\aura-dark-custom.json into
     %APPDATA%\Zed, backing up any files that already exist.
 
 .PARAMETER Destination
     Install into this directory instead of %APPDATA%\Zed.
 
 .PARAMETER BaseUrl
-    Download settings.json and the theme from this URL (used when running
-    the script remotely, e.g. via `irm ... | iex`).
+    Download the config files from this URL (used when running the script
+    remotely, e.g. via `irm ... | iex`).
 
 .PARAMETER NoBackup
-    Do not back up existing settings/theme files.
+    Do not back up existing settings/keymap/theme files.
 
 .PARAMETER DryRun
     Show what would happen without changing anything.
@@ -50,12 +50,15 @@ if ($PSScriptRoot) {
 }
 
 $ThemeFile = "aura-dark-custom.json"
+$KeymapFile = "keymap.json"
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
 $SettingsSrc = $null
+$KeymapSrc = $null
 $ThemeSrc = $null
 if ($ScriptDir) {
     $SettingsSrc = Join-Path $ScriptDir "settings.json"
+    $KeymapSrc = Join-Path $ScriptDir $KeymapFile
     $ThemeSrc = Join-Path (Join-Path $ScriptDir "themes") $ThemeFile
 }
 
@@ -92,8 +95,8 @@ Usage:
 
 Options:
   -Destination PATH   Install into PATH instead of %APPDATA%\Zed
-  -BaseUrl URL        Download settings/theme from URL instead of this checkout
-  -NoBackup           Do not back up existing settings/theme files
+  -BaseUrl URL        Download config files from URL instead of this checkout
+  -NoBackup           Do not back up existing settings/keymap/theme files
   -DryRun             Show what would happen without changing anything
   -Help               Show this help
 
@@ -108,23 +111,26 @@ if ($Help) {
 }
 
 $needDownload = $true
-if ($SettingsSrc -and $ThemeSrc -and
+if ($SettingsSrc -and $KeymapSrc -and $ThemeSrc -and
     (Test-Path -LiteralPath $SettingsSrc) -and
+    (Test-Path -LiteralPath $KeymapSrc) -and
     (Test-Path -LiteralPath $ThemeSrc)) {
     $needDownload = $false
 }
 
 $TempDir = $null
 if ($needDownload) {
-    Write-Info "Downloading settings.json and $ThemeFile"
+    Write-Info "Downloading settings.json, $KeymapFile and $ThemeFile"
     $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("alok-zed-config-" + [Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path (Join-Path $TempDir "themes") | Out-Null
     $SettingsSrc = Join-Path $TempDir "settings.json"
+    $KeymapSrc = Join-Path $TempDir $KeymapFile
     $ThemeSrc = Join-Path (Join-Path $TempDir "themes") $ThemeFile
 
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/settings.json" -OutFile $SettingsSrc
+        Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/$KeymapFile" -OutFile $KeymapSrc
         Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/themes/$ThemeFile" -OutFile $ThemeSrc
     } catch {
         Fail "Download failed from $BaseUrl. Use -BaseUrl or ALOK_ZED_CONFIG_BASE_URL. ($($_.Exception.Message))"
@@ -153,6 +159,7 @@ if (-not [System.IO.Path]::IsPathRooted($ConfigDir)) {
 $ConfigDir = [System.IO.Path]::GetFullPath($ConfigDir)
 
 $SettingsDest = Join-Path $ConfigDir "settings.json"
+$KeymapDest = Join-Path $ConfigDir $KeymapFile
 $ThemeDest = Join-Path (Join-Path $ConfigDir "themes") $ThemeFile
 
 # ---------------------------------------------------------------- helpers
@@ -206,6 +213,7 @@ Invoke-Step "New-Item -ItemType Directory '$ConfigDir\themes'" {
 
 Write-Step "Backing up existing files"
 Backup-File $SettingsDest
+Backup-File $KeymapDest
 Backup-File $ThemeDest
 
 Write-Step "Installing settings.json"
@@ -214,6 +222,14 @@ Invoke-Step "Copy-Item '$SettingsSrc' -> '$SettingsDest'" {
 }
 if (-not $DryRun) {
     Write-Ok "Settings -> $SettingsDest"
+}
+
+Write-Step "Installing $KeymapFile"
+Invoke-Step "Copy-Item '$KeymapSrc' -> '$KeymapDest'" {
+    Copy-Item -LiteralPath $KeymapSrc -Destination $KeymapDest -Force
+}
+if (-not $DryRun) {
+    Write-Ok "Keymap   -> $KeymapDest"
 }
 
 Write-Step "Installing $ThemeFile"
@@ -260,6 +276,8 @@ Write-Host "  4. Replace the YOUR_* placeholders in:"
 Write-Host "       $SettingsDest"
 Write-Host ""
 Write-Host "Notes:"
+Write-Host "  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base"
+Write-Host "    keymap. See KEYBINDINGS.md for the full list."
 Write-Host "  - ""Material Icon Theme"" is referenced by settings.json. Install that"
 Write-Host "    extension, or change ""icon_theme"" to a built-in theme."
 Write-Host "  - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension."
