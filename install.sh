@@ -15,6 +15,9 @@
 # Options:
 #   -d, --dir PATH      Install into PATH instead of the default Zed config dir
 #   -n, --no-backup     Do not back up existing settings/keymap/theme files
+#   -y, --yes           Install all components without asking
+#       --only LIST     Install only these components (comma-separated):
+#                       settings, keymap, theme, or all (implies --yes)
 #       --base-url URL  Download config files from URL instead of this checkout
 #       --dry-run       Show what would happen without changing anything
 #   -h, --help          Show this help
@@ -67,6 +70,11 @@ trap cleanup EXIT
 TARGET_DIR=""
 DO_BACKUP=true
 DRY_RUN=false
+ASSUME_YES=false
+ONLY_COMPONENTS=""
+WANT_SETTINGS=true
+WANT_KEYMAP=true
+WANT_THEME=true
 
 # ---------------------------------------------------------------- pretty output
 
@@ -98,6 +106,9 @@ Usage:
 Options:
   -d, --dir PATH      Install into PATH instead of the default Zed config dir
   -n, --no-backup     Do not back up existing settings/keymap/theme files
+  -y, --yes           Install all components without asking
+      --only LIST     Install only these components (comma-separated):
+                      settings, keymap, theme, or all (implies --yes)
       --base-url URL  Download config files from URL instead of this checkout
       --dry-run       Show what would happen without changing anything
   -h, --help          Show this help
@@ -114,6 +125,8 @@ Zed config directories:
 
 Examples:
   ./install.sh
+  ./install.sh --only keymap,theme
+  ./install.sh --yes
   ./install.sh --dry-run
   ./install.sh --dir "$HOME/zed-test"
   ./install.sh --dir "/mnt/c/Users/you/AppData/Roaming/Zed"
@@ -135,6 +148,21 @@ while [ $# -gt 0 ]; do
       ;;
     -n|--no-backup)
       DO_BACKUP=false
+      shift
+      ;;
+    -y|--yes)
+      ASSUME_YES=true
+      shift
+      ;;
+    --only)
+      [ $# -ge 2 ] || die "Missing value for $1"
+      [ -n "$2" ] || die "--only needs settings, keymap, theme, or all"
+      ONLY_COMPONENTS="$2"
+      shift 2
+      ;;
+    --only=*)
+      ONLY_COMPONENTS="${1#*=}"
+      [ -n "$ONLY_COMPONENTS" ] || die "--only needs settings, keymap, theme, or all"
       shift
       ;;
     --base-url)
@@ -239,6 +267,117 @@ backup_if_exists() {
   fi
 }
 
+# ---------------------------------------------------------------- components
+
+have_tty() {
+  ( exec 3<>/dev/tty ) 2>/dev/null
+}
+
+any_selected() {
+  $WANT_SETTINGS || $WANT_KEYMAP || $WANT_THEME
+}
+
+selection_names() {
+  local names=""
+  $WANT_SETTINGS && names="${names}settings "
+  $WANT_KEYMAP && names="${names}keymap "
+  $WANT_THEME && names="${names}theme "
+  printf '%s' "${names% }"
+}
+
+set_all_components() {
+  WANT_SETTINGS=true
+  WANT_KEYMAP=true
+  WANT_THEME=true
+}
+
+select_components() {
+  if [ -n "$ONLY_COMPONENTS" ]; then
+    WANT_SETTINGS=false
+    WANT_KEYMAP=false
+    WANT_THEME=false
+    local items item item_lower
+    items="${ONLY_COMPONENTS//,/ }"
+    for item in $items; do
+      item_lower="$(printf '%s' "$item" | tr '[:upper:]' '[:lower:]')"
+      case "$item_lower" in
+        all) set_all_components ;;
+        settings|settings.json) WANT_SETTINGS=true ;;
+        keymap|keymap.json) WANT_KEYMAP=true ;;
+        theme|themes|theme.json) WANT_THEME=true ;;
+        *) die "Unknown --only component: $item (use settings, keymap, theme, or all)" ;;
+      esac
+    done
+    any_selected || die "--only did not select any components."
+    return
+  fi
+
+  if $ASSUME_YES; then
+    set_all_components
+    return
+  fi
+
+  if ! have_tty; then
+    info "No interactive terminal; installing all components (use --only to choose)."
+    set_all_components
+    return
+  fi
+
+  local choice normalized token mark
+  while :; do
+    {
+      printf '\n%sSelect what to install%s (Enter = install, default: all)\n' "$BOLD" "$RESET"
+      if $WANT_SETTINGS; then mark="[x]"; else mark="[ ]"; fi
+      printf '  %s 1) settings.json\n' "$mark"
+      if $WANT_KEYMAP; then mark="[x]"; else mark="[ ]"; fi
+      printf '  %s 2) keymap.json\n' "$mark"
+      if $WANT_THEME; then mark="[x]"; else mark="[ ]"; fi
+      printf '  %s 3) Aura Dark Custom theme\n' "$mark"
+      printf 'Toggle 1-3 (e.g. "1 3"), a=all, Enter=install: '
+    } > /dev/tty
+
+    if ! IFS= read -r choice < /dev/tty; then
+      break
+    fi
+
+    normalized="$(printf '%s' "$choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case "$normalized" in
+      "") break ;;
+      a|all) set_all_components ;;
+      *)
+        choice="${choice//,/ }"
+        for token in $choice; do
+          case "$token" in
+            1) if $WANT_SETTINGS; then WANT_SETTINGS=false; else WANT_SETTINGS=true; fi ;;
+            2) if $WANT_KEYMAP; then WANT_KEYMAP=false; else WANT_KEYMAP=true; fi ;;
+            3) if $WANT_THEME; then WANT_THEME=false; else WANT_THEME=true; fi ;;
+            *) printf 'Unknown choice: %s\n' "$token" > /dev/tty ;;
+          esac
+        done
+        ;;
+    esac
+  done
+
+  if ! any_selected; then
+    printf 'Nothing selected; installing all components.\n' > /dev/tty 2>/dev/null || true
+    set_all_components
+  fi
+}
+
+# ---------------------------------------------------------------- run
+
+printf '\n%s==>%s %salok-zed-config installer%s\n' "$CYAN" "$RESET" "$BOLD" "$RESET"
+printf '    platform : %s\n' "$OS"
+printf '    source   : %s\n' "${SCRIPT_DIR:-$BASE_URL}"
+printf '    target   : %s\n\n' "$CONFIG_DIR"
+
+if $DRY_RUN; then
+  warn "Dry run: no files will be changed."
+fi
+
+select_components
+printf '    install  : %s\n\n' "$(selection_names)"
+
 # ---------------------------------------------------------------- preflight
 
 fetch() {
@@ -255,57 +394,80 @@ fetch() {
 BASE_URL="${BASE_URL%/}"
 
 # Running from a checkout: the files sit next to this script. Running from a
-# pipe (curl ... | bash): download them from BASE_URL first.
-if [ ! -f "$SETTINGS_SRC" ] || [ ! -f "$KEYMAP_SRC" ] || [ ! -f "$THEME_SRC" ]; then
+# pipe (curl ... | bash): download only the selected files from BASE_URL.
+NEED_SETTINGS_DOWNLOAD=false
+NEED_KEYMAP_DOWNLOAD=false
+NEED_THEME_DOWNLOAD=false
+if $WANT_SETTINGS && [ ! -f "$SETTINGS_SRC" ]; then NEED_SETTINGS_DOWNLOAD=true; fi
+if $WANT_KEYMAP && [ ! -f "$KEYMAP_SRC" ]; then NEED_KEYMAP_DOWNLOAD=true; fi
+if $WANT_THEME && [ ! -f "$THEME_SRC" ]; then NEED_THEME_DOWNLOAD=true; fi
+
+if $NEED_SETTINGS_DOWNLOAD || $NEED_KEYMAP_DOWNLOAD || $NEED_THEME_DOWNLOAD; then
   TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/alok-zed-config.XXXXXX" 2>/dev/null || true)"
   [ -n "$TMP_DIR" ] || die "Could not create a temporary directory."
-  SETTINGS_SRC="$TMP_DIR/settings.json"
-  KEYMAP_SRC="$TMP_DIR/$KEYMAP_FILE"
-  THEME_SRC="$TMP_DIR/$THEME_FILE"
-  info "Downloading settings.json, $KEYMAP_FILE and $THEME_FILE"
-  fetch "$BASE_URL/settings.json" "$SETTINGS_SRC" ||
-    die "Could not download settings.json from $BASE_URL"
-  fetch "$BASE_URL/$KEYMAP_FILE" "$KEYMAP_SRC" ||
-    die "Could not download $KEYMAP_FILE from $BASE_URL"
-  fetch "$BASE_URL/themes/$THEME_FILE" "$THEME_SRC" ||
-    die "Could not download themes/$THEME_FILE from $BASE_URL"
-fi
-
-printf '\n%s==>%s %salok-zed-config installer%s\n' "$CYAN" "$RESET" "$BOLD" "$RESET"
-printf '    platform : %s\n' "$OS"
-printf '    source   : %s\n' "${SCRIPT_DIR:-$BASE_URL}"
-printf '    target   : %s\n\n' "$CONFIG_DIR"
-
-if $DRY_RUN; then
-  warn "Dry run: no files will be changed."
+  downloads=""
+  if $NEED_SETTINGS_DOWNLOAD; then
+    SETTINGS_SRC="$TMP_DIR/settings.json"
+    downloads="${downloads:+$downloads, }settings.json"
+  fi
+  if $NEED_KEYMAP_DOWNLOAD; then
+    KEYMAP_SRC="$TMP_DIR/$KEYMAP_FILE"
+    downloads="${downloads:+$downloads, }${KEYMAP_FILE}"
+  fi
+  if $NEED_THEME_DOWNLOAD; then
+    THEME_SRC="$TMP_DIR/$THEME_FILE"
+    downloads="${downloads:+$downloads, }${THEME_FILE}"
+  fi
+  info "Downloading $downloads"
+  if $NEED_SETTINGS_DOWNLOAD; then
+    fetch "$BASE_URL/settings.json" "$SETTINGS_SRC" ||
+      die "Could not download settings.json from $BASE_URL"
+  fi
+  if $NEED_KEYMAP_DOWNLOAD; then
+    fetch "$BASE_URL/$KEYMAP_FILE" "$KEYMAP_SRC" ||
+      die "Could not download $KEYMAP_FILE from $BASE_URL"
+  fi
+  if $NEED_THEME_DOWNLOAD; then
+    fetch "$BASE_URL/themes/$THEME_FILE" "$THEME_SRC" ||
+      die "Could not download themes/$THEME_FILE from $BASE_URL"
+  fi
 fi
 
 # ---------------------------------------------------------------- install
 
 step "Creating $CONFIG_DIR"
-run mkdir -p "$CONFIG_DIR/themes"
+run mkdir -p "$CONFIG_DIR"
+if $WANT_THEME; then
+  run mkdir -p "$CONFIG_DIR/themes"
+fi
 
 step "Backing up existing files"
-backup_if_exists "$SETTINGS_DEST"
-backup_if_exists "$KEYMAP_DEST"
-backup_if_exists "$THEME_DEST"
+if $WANT_SETTINGS; then backup_if_exists "$SETTINGS_DEST"; fi
+if $WANT_KEYMAP; then backup_if_exists "$KEYMAP_DEST"; fi
+if $WANT_THEME; then backup_if_exists "$THEME_DEST"; fi
 
-step "Installing settings.json"
-run cp "$SETTINGS_SRC" "$SETTINGS_DEST"
-if ! $DRY_RUN; then
-  ok "Settings -> $SETTINGS_DEST"
+if $WANT_SETTINGS; then
+  step "Installing settings.json"
+  run cp "$SETTINGS_SRC" "$SETTINGS_DEST"
+  if ! $DRY_RUN; then
+    ok "Settings -> $SETTINGS_DEST"
+  fi
 fi
 
-step "Installing $KEYMAP_FILE"
-run cp "$KEYMAP_SRC" "$KEYMAP_DEST"
-if ! $DRY_RUN; then
-  ok "Keymap   -> $KEYMAP_DEST"
+if $WANT_KEYMAP; then
+  step "Installing $KEYMAP_FILE"
+  run cp "$KEYMAP_SRC" "$KEYMAP_DEST"
+  if ! $DRY_RUN; then
+    ok "Keymap   -> $KEYMAP_DEST"
+  fi
 fi
 
-step "Installing $THEME_FILE"
-run cp "$THEME_SRC" "$THEME_DEST"
-if ! $DRY_RUN; then
-  ok "Theme    -> $THEME_DEST"
+if $WANT_THEME; then
+  step "Installing $THEME_FILE"
+  run cp "$THEME_SRC" "$THEME_DEST"
+  if ! $DRY_RUN; then
+    ok "Theme    -> $THEME_DEST"
+  fi
 fi
 
 # ---------------------------------------------------------------- post-install
@@ -334,27 +496,42 @@ if [ "$OS" = "wsl" ]; then
   fi
 fi
 
-if [ -f "$SETTINGS_DEST" ] && grep -q 'YOUR_[A-Z0-9_]*' "$SETTINGS_DEST" 2>/dev/null; then
+if $WANT_SETTINGS && [ -f "$SETTINGS_DEST" ] &&
+  grep -q 'YOUR_[A-Z0-9_]*' "$SETTINGS_DEST" 2>/dev/null; then
   warn "settings.json still contains placeholder API keys (YOUR_*)."
 fi
 
-cat <<EOF
+printf '\n%sDone.%s' "$BOLD" "$RESET"
+if $WANT_THEME; then
+  printf ' Restart Zed, then choose %sAura Dark Custom%s from the theme selector.' "$BOLD" "$RESET"
+fi
+printf '\n'
+printf 'Installed: %s\n' "$(selection_names)"
 
-${BOLD}Done.${RESET} Restart Zed, then choose ${BOLD}Aura Dark Custom${RESET} from the theme selector.
+if $WANT_THEME || $WANT_SETTINGS; then
+  printf '\nNext steps:\n'
+  step_number=1
+  if $WANT_THEME; then
+    printf '  %d. Quit Zed completely and reopen it (local themes load at startup).\n' "$step_number"
+    step_number=$((step_number + 1))
+    printf '  %d. Open the command palette and run "theme selector: toggle".\n' "$step_number"
+    step_number=$((step_number + 1))
+    printf '  %d. Pick "Aura Dark Custom" for dark mode (light mode uses Ayu Light).\n' "$step_number"
+    step_number=$((step_number + 1))
+  fi
+  if $WANT_SETTINGS; then
+    printf '  %d. Replace the YOUR_* placeholders in:\n       %s\n' "$step_number" "$SETTINGS_DEST"
+  fi
+fi
 
-Next steps:
-  1. Quit Zed completely and reopen it (local themes load at startup).
-  2. Open the command palette and run "theme selector: toggle".
-  3. Pick "Aura Dark Custom" for dark mode (light mode uses Ayu Light).
-  4. Replace the YOUR_* placeholders in:
-       $SETTINGS_DEST
-
-Notes:
-  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base
-    keymap. See KEYBINDINGS.md for the full list.
-  - "Material Icon Theme" is referenced by settings.json. Install that
-    extension, or change "icon_theme" to a built-in theme.
-  - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension.
-  - See README.md for secrets, extensions, and troubleshooting.
-
-EOF
+printf '\nNotes:\n'
+if $WANT_KEYMAP; then
+  printf '  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base\n'
+  printf '    keymap. See KEYBINDINGS.md for the full list.\n'
+fi
+if $WANT_SETTINGS; then
+  printf '  - "Material Icon Theme" is referenced by settings.json. Install that\n'
+  printf '    extension, or change "icon_theme" to a built-in theme.\n'
+  printf '  - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension.\n'
+fi
+printf '  - See README.md for secrets, extensions, and troubleshooting.\n\n'

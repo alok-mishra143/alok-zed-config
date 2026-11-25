@@ -13,6 +13,13 @@
     Download the config files from this URL (used when running the script
     remotely, e.g. via `irm ... | iex`).
 
+.PARAMETER Only
+    Install only these components (comma-separated): settings, keymap, theme,
+    or all. Implies -Yes.
+
+.PARAMETER Yes
+    Install all components without asking.
+
 .PARAMETER NoBackup
     Do not back up existing settings/keymap/theme files.
 
@@ -30,11 +37,19 @@
 
 .EXAMPLE
     .\install.ps1 -Destination "$env:TEMP\zed-test" -DryRun
+
+.EXAMPLE
+    .\install.ps1 -Only keymap,theme
+
+.EXAMPLE
+    .\install.ps1 -Yes
 #>
 [CmdletBinding()]
 param(
     [string]$Destination = "",
     [string]$BaseUrl = "",
+    [string]$Only = "",
+    [switch]$Yes,
     [switch]$NoBackup,
     [switch]$DryRun,
     [switch]$Help
@@ -96,6 +111,9 @@ Usage:
 Options:
   -Destination PATH   Install into PATH instead of %APPDATA%\Zed
   -BaseUrl URL        Download config files from URL instead of this checkout
+  -Only LIST          Install only these components (comma-separated):
+                      settings, keymap, theme, or all (implies -Yes)
+  -Yes                Install all components without asking
   -NoBackup           Do not back up existing settings/keymap/theme files
   -DryRun             Show what would happen without changing anything
   -Help               Show this help
@@ -110,28 +128,139 @@ if ($Help) {
     exit 0
 }
 
-$needDownload = $true
-if ($SettingsSrc -and $KeymapSrc -and $ThemeSrc -and
-    (Test-Path -LiteralPath $SettingsSrc) -and
-    (Test-Path -LiteralPath $KeymapSrc) -and
-    (Test-Path -LiteralPath $ThemeSrc)) {
-    $needDownload = $false
+# ---------------------------------------------------------------- components
+
+$WantSettings = $true
+$WantKeymap = $true
+$WantTheme = $true
+
+function Set-AllComponents {
+    $script:WantSettings = $true
+    $script:WantKeymap = $true
+    $script:WantTheme = $true
 }
 
+function Any-Selected {
+    return ($WantSettings -or $WantKeymap -or $WantTheme)
+}
+
+function Get-SelectionSummary {
+    $names = @()
+    if ($WantSettings) { $names += "settings" }
+    if ($WantKeymap) { $names += "keymap" }
+    if ($WantTheme) { $names += "theme" }
+    return ($names -join " ")
+}
+
+$onlyProvided = $null -ne $PSBoundParameters -and $PSBoundParameters.ContainsKey("Only")
+if ($onlyProvided) {
+    if (-not $Only) {
+        Fail "-Only needs settings, keymap, theme, or all"
+    }
+    $WantSettings = $false
+    $WantKeymap = $false
+    $WantTheme = $false
+    foreach ($item in ($Only -split '[, ]+' | Where-Object { $_ })) {
+        switch ($item.ToLower()) {
+            "all" { Set-AllComponents }
+            "settings" { $script:WantSettings = $true }
+            "settings.json" { $script:WantSettings = $true }
+            "keymap" { $script:WantKeymap = $true }
+            "keymap.json" { $script:WantKeymap = $true }
+            "theme" { $script:WantTheme = $true }
+            "themes" { $script:WantTheme = $true }
+            "theme.json" { $script:WantTheme = $true }
+            default { Fail "Unknown -Only component: $item (use settings, keymap, theme, or all)" }
+        }
+    }
+    if (-not (Any-Selected)) {
+        Fail "-Only did not select any components."
+    }
+} elseif (-not $Yes) {
+    $canPrompt = $true
+    try {
+        if ([Console]::IsInputRedirected) { $canPrompt = $false }
+    } catch {
+        $canPrompt = $false
+    }
+
+    if (-not $canPrompt) {
+        Write-Info "No interactive input; installing all components (use -Only to choose)."
+    } else {
+        while ($true) {
+            Write-Host ""
+            Write-Host "Select what to install (Enter = install, default: all)" -ForegroundColor White
+            $m1 = if ($WantSettings) { "[x]" } else { "[ ]" }
+            $m2 = if ($WantKeymap) { "[x]" } else { "[ ]" }
+            $m3 = if ($WantTheme) { "[x]" } else { "[ ]" }
+            Write-Host "  $m1 1) settings.json"
+            Write-Host "  $m2 2) keymap.json"
+            Write-Host "  $m3 3) Aura Dark Custom theme"
+
+            $answer = $null
+            try {
+                $answer = Read-Host 'Toggle 1-3 (e.g. "1 3"), a=all, Enter=install'
+            } catch {
+                break
+            }
+            if ($null -eq $answer) { break }
+            $normalized = ($answer -replace '\s', '').ToLower()
+            if ($normalized -eq "") { break }
+            if ($normalized -eq "a" -or $normalized -eq "all") {
+                Set-AllComponents
+                continue
+            }
+            foreach ($token in ($answer -split '[, ]+' | Where-Object { $_ })) {
+                switch ($token) {
+                    "1" { $script:WantSettings = -not $WantSettings }
+                    "2" { $script:WantKeymap = -not $WantKeymap }
+                    "3" { $script:WantTheme = -not $WantTheme }
+                    default { Write-Warn "Unknown choice: $token" }
+                }
+            }
+        }
+        if (-not (Any-Selected)) {
+            Write-Warn "Nothing selected; installing all components."
+            Set-AllComponents
+        }
+    }
+}
+
+$needSettingsDownload = $WantSettings -and (-not $SettingsSrc -or -not (Test-Path -LiteralPath $SettingsSrc))
+$needKeymapDownload = $WantKeymap -and (-not $KeymapSrc -or -not (Test-Path -LiteralPath $KeymapSrc))
+$needThemeDownload = $WantTheme -and (-not $ThemeSrc -or -not (Test-Path -LiteralPath $ThemeSrc))
+
 $TempDir = $null
-if ($needDownload) {
-    Write-Info "Downloading settings.json, $KeymapFile and $ThemeFile"
+if ($needSettingsDownload -or $needKeymapDownload -or $needThemeDownload) {
+    $downloads = @()
     $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("alok-zed-config-" + [Guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Force -Path (Join-Path $TempDir "themes") | Out-Null
-    $SettingsSrc = Join-Path $TempDir "settings.json"
-    $KeymapSrc = Join-Path $TempDir $KeymapFile
-    $ThemeSrc = Join-Path (Join-Path $TempDir "themes") $ThemeFile
 
+    if ($needSettingsDownload) {
+        $SettingsSrc = Join-Path $TempDir "settings.json"
+        $downloads += "settings.json"
+    }
+    if ($needKeymapDownload) {
+        $KeymapSrc = Join-Path $TempDir $KeymapFile
+        $downloads += $KeymapFile
+    }
+    if ($needThemeDownload) {
+        $ThemeSrc = Join-Path (Join-Path $TempDir "themes") $ThemeFile
+        $downloads += $ThemeFile
+    }
+
+    Write-Info "Downloading $($downloads -join ', ')"
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/settings.json" -OutFile $SettingsSrc
-        Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/$KeymapFile" -OutFile $KeymapSrc
-        Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/themes/$ThemeFile" -OutFile $ThemeSrc
+        if ($needSettingsDownload) {
+            Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/settings.json" -OutFile $SettingsSrc
+        }
+        if ($needKeymapDownload) {
+            Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/$KeymapFile" -OutFile $KeymapSrc
+        }
+        if ($needThemeDownload) {
+            Invoke-WebRequest -UseBasicParsing -Uri "$BaseUrl/themes/$ThemeFile" -OutFile $ThemeSrc
+        }
     } catch {
         Fail "Download failed from $BaseUrl. Use -BaseUrl or ALOK_ZED_CONFIG_BASE_URL. ($($_.Exception.Message))"
     }
@@ -202,42 +331,54 @@ Write-Host "    platform : windows"
 $sourceLabel = if ($ScriptDir) { $ScriptDir } else { $BaseUrl }
 Write-Host "    source   : $sourceLabel"
 Write-Host "    target   : $ConfigDir"
+Write-Host "    install  : $(Get-SelectionSummary)"
 Write-Host ""
 
 if ($DryRun) { Write-Warn "Dry run: no files will be changed." }
 
 Write-Step "Creating $ConfigDir"
-Invoke-Step "New-Item -ItemType Directory '$ConfigDir\themes'" {
-    New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "themes") | Out-Null
+Invoke-Step "New-Item -ItemType Directory '$ConfigDir'" {
+    New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
+}
+if ($WantTheme) {
+    Invoke-Step "New-Item -ItemType Directory '$ConfigDir\themes'" {
+        New-Item -ItemType Directory -Force -Path (Join-Path $ConfigDir "themes") | Out-Null
+    }
 }
 
 Write-Step "Backing up existing files"
-Backup-File $SettingsDest
-Backup-File $KeymapDest
-Backup-File $ThemeDest
+if ($WantSettings) { Backup-File $SettingsDest }
+if ($WantKeymap) { Backup-File $KeymapDest }
+if ($WantTheme) { Backup-File $ThemeDest }
 
-Write-Step "Installing settings.json"
-Invoke-Step "Copy-Item '$SettingsSrc' -> '$SettingsDest'" {
-    Copy-Item -LiteralPath $SettingsSrc -Destination $SettingsDest -Force
-}
-if (-not $DryRun) {
-    Write-Ok "Settings -> $SettingsDest"
-}
-
-Write-Step "Installing $KeymapFile"
-Invoke-Step "Copy-Item '$KeymapSrc' -> '$KeymapDest'" {
-    Copy-Item -LiteralPath $KeymapSrc -Destination $KeymapDest -Force
-}
-if (-not $DryRun) {
-    Write-Ok "Keymap   -> $KeymapDest"
+if ($WantSettings) {
+    Write-Step "Installing settings.json"
+    Invoke-Step "Copy-Item '$SettingsSrc' -> '$SettingsDest'" {
+        Copy-Item -LiteralPath $SettingsSrc -Destination $SettingsDest -Force
+    }
+    if (-not $DryRun) {
+        Write-Ok "Settings -> $SettingsDest"
+    }
 }
 
-Write-Step "Installing $ThemeFile"
-Invoke-Step "Copy-Item '$ThemeSrc' -> '$ThemeDest'" {
-    Copy-Item -LiteralPath $ThemeSrc -Destination $ThemeDest -Force
+if ($WantKeymap) {
+    Write-Step "Installing $KeymapFile"
+    Invoke-Step "Copy-Item '$KeymapSrc' -> '$KeymapDest'" {
+        Copy-Item -LiteralPath $KeymapSrc -Destination $KeymapDest -Force
+    }
+    if (-not $DryRun) {
+        Write-Ok "Keymap   -> $KeymapDest"
+    }
 }
-if (-not $DryRun) {
-    Write-Ok "Theme    -> $ThemeDest"
+
+if ($WantTheme) {
+    Write-Step "Installing $ThemeFile"
+    Invoke-Step "Copy-Item '$ThemeSrc' -> '$ThemeDest'" {
+        Copy-Item -LiteralPath $ThemeSrc -Destination $ThemeDest -Force
+    }
+    if (-not $DryRun) {
+        Write-Ok "Theme    -> $ThemeDest"
+    }
 }
 
 # ---------------------------------------------------------------- post-install
@@ -260,27 +401,48 @@ if (-not $zedFound) {
     Write-Warn "Zed was not detected. Install it from https://zed.dev/download if you haven't yet."
 }
 
-if ((Test-Path -LiteralPath $SettingsDest) -and
+if ($WantSettings -and (Test-Path -LiteralPath $SettingsDest) -and
     (Select-String -LiteralPath $SettingsDest -Pattern 'YOUR_[A-Z0-9_]*' -Quiet)) {
     Write-Warn "settings.json still contains placeholder API keys (YOUR_*)."
 }
 
 Write-Host ""
-Write-Host "Done. Restart Zed, then choose Aura Dark Custom from the theme selector." -ForegroundColor White
-Write-Host ""
-Write-Host "Next steps:"
-Write-Host "  1. Quit Zed completely and reopen it (local themes load at startup)."
-Write-Host "  2. Open the command palette and run ""theme selector: toggle""."
-Write-Host "  3. Pick ""Aura Dark Custom"" for dark mode (light mode uses Ayu Light)."
-Write-Host "  4. Replace the YOUR_* placeholders in:"
-Write-Host "       $SettingsDest"
+if ($WantTheme) {
+    Write-Host "Done. Restart Zed, then choose Aura Dark Custom from the theme selector." -ForegroundColor White
+} else {
+    Write-Host "Done." -ForegroundColor White
+}
+Write-Host "Installed: $(Get-SelectionSummary)"
+
+$step = 1
+if ($WantTheme -or $WantSettings) {
+    Write-Host ""
+    Write-Host "Next steps:"
+    if ($WantTheme) {
+        Write-Host "  $($step). Quit Zed completely and reopen it (local themes load at startup)."
+        $step++
+        Write-Host "  $($step). Open the command palette and run ""theme selector: toggle""."
+        $step++
+        Write-Host "  $($step). Pick ""Aura Dark Custom"" for dark mode (light mode uses Ayu Light)."
+        $step++
+    }
+    if ($WantSettings) {
+        Write-Host "  $($step). Replace the YOUR_* placeholders in:"
+        Write-Host "       $SettingsDest"
+    }
+}
+
 Write-Host ""
 Write-Host "Notes:"
-Write-Host "  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base"
-Write-Host "    keymap. See KEYBINDINGS.md for the full list."
-Write-Host "  - ""Material Icon Theme"" is referenced by settings.json. Install that"
-Write-Host "    extension, or change ""icon_theme"" to a built-in theme."
-Write-Host "  - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension."
+if ($WantKeymap) {
+    Write-Host "  - keymap.json adds ctrl/ctrl-alt shortcuts on top of the VSCode base"
+    Write-Host "    keymap. See KEYBINDINGS.md for the full list."
+}
+if ($WantSettings) {
+    Write-Host "  - ""Material Icon Theme"" is referenced by settings.json. Install that"
+    Write-Host "    extension, or change ""icon_theme"" to a built-in theme."
+    Write-Host "  - Colored TODO/INFO/WARN/FIXME tags need the Comments Highlighter extension."
+}
 Write-Host "  - See README.md for secrets, extensions, and troubleshooting."
 Write-Host ""
 

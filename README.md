@@ -21,9 +21,26 @@ curl -fsSL https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main
 irm https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main/install.ps1 | iex
 ```
 
-The command downloads the settings, keymap and theme, backs up your old files,
-and installs everything. Then quit and reopen Zed, open the theme selector
-(`theme selector: toggle`) and pick **Aura Dark Custom**.
+The command asks which parts to install — **settings.json**, **keymap.json**
+and the **Aura Dark Custom** theme — with all three selected by default. Press
+Enter to install all, or toggle components with `1`–`3` first. It backs up your
+old files and installs the selection. Then quit and reopen Zed, open the theme
+selector (`theme selector: toggle`) and pick **Aura Dark Custom**.
+
+To skip the prompt:
+
+```bash
+# Install everything without asking
+curl -fsSL https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main/install.sh | bash -s -- --yes
+
+# Install only the keymap and theme
+curl -fsSL https://raw.githubusercontent.com/alok-mishra143/alok-zed-config/main/install.sh | bash -s -- --only keymap,theme
+```
+
+Other `--only` values: `settings`, `theme`, `all`. From a checkout you can also
+run `./install.sh --only settings` directly. On Windows the installer shows the
+same checklist, and `install.ps1 -Only keymap,theme` / `-Yes` work when run from
+a checkout.
 
 ## Keybindings
 
